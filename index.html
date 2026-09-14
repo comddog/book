@@ -29,6 +29,12 @@
     padding:20px 0 max(14px, env(safe-area-inset-bottom))}
   .muted{color:var(--sub)}
   .center{text-align:center}
+  .sec-title{font-size:14px; font-weight:800; color:var(--navy); margin:0 0 10px}
+  .agree-box{background:#f6f8fd; border:1px solid #e3e9f7; border-radius:12px; padding:14px 16px;
+    font-size:14px; line-height:1.8; color:#3a4160; word-break:keep-all}
+  .check-row{display:flex; align-items:flex-start; gap:10px; margin-top:14px; font-size:14.5px;
+    font-weight:600; color:var(--txt); cursor:pointer; line-height:1.5}
+  .check-row input{width:20px; height:20px; accent-color:var(--primary); flex:none; margin-top:1px}
   .lead{text-align:center; font-size:15px; line-height:1.6; margin:8px 0 14px}
   .lead.small{font-size:13px; color:var(--sub); margin:6px 0 0}
   .done{text-align:center; font-size:20px; font-weight:800; color:var(--navy); margin:14px 0 8px}
@@ -39,16 +45,17 @@
     padding:18px; text-align:center; color:#fff}
   .count-lbl{font-size:13px; opacity:.85}
   .count{font-size:34px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:.02em; margin-top:4px}
-  .chips{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 2px}
-  .chip{background:#f1f3fb; color:#41508f; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:600}
   .field{margin:12px 0}
-  .field label{display:block; font-size:13px; color:var(--sub); font-weight:600; margin-bottom:6px}
+  .field label{display:block; font-size:13px; color:var(--sub); font-weight:600; margin-bottom:6px; word-break:keep-all}
   .field input,.field select{width:100%; height:48px; font-size:16px; font-family:inherit; padding:0 14px;
     border:1.5px solid var(--line); border-radius:12px; background:#fff; color:var(--txt); outline:none}
   .field input:focus,.field select:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(47,69,197,.12)}
+  .hint{font-size:12px; color:#98a1b8; margin-top:5px; min-height:1em; line-height:1.5}
+  .hint.ok-hint{color:#0b7a43; font-weight:600}
+  .hint.err-hint{color:var(--err); font-weight:600}
   .btn{width:100%; height:52px; margin-top:14px; border:0; border-radius:14px; background:var(--primary);
     font-family:inherit; color:#fff; font-size:17px; font-weight:700; cursor:pointer}
-  .btn:disabled{opacity:.55}
+  .btn:disabled{opacity:.5; cursor:default}
   .btn.ghost{background:#eef1fb; color:var(--primary)}
   .box{border-radius:12px; padding:12px 14px; font-size:14px; line-height:1.55; margin-top:12px; word-break:keep-all}
   .box.ok{background:var(--ok-bg); color:#0b7a43}
@@ -67,15 +74,15 @@
     <h1 id="programTitle">책과 문화의 밤</h1>
     <div class="subtitle">프로그램 신청</div>
   </header>
-  <main id="panel" class="card"><p class="center muted">불러오는 중…</p></main>
+  <main id="panel" class="card"><p class="center muted">준비 중…</p></main>
   <footer>일광초등학교</footer>
 </div>
 <script>
 'use strict';
 
 /* ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
- * 상세설정가이드.md 5단계 — 아래 따옴표 안에 배포된 웹앱 주소(/exec)를 붙여넣으세요.
- * 예) const GAS_URL = 'https://script.google.com/macros/s/AKfy.../exec';
+ * 백엔드 웹앱 주소(/exec) — 이미 설정되어 있습니다.
+ * 재배포 등으로 주소가 바뀐 경우에만 아래 값을 수정하세요.
  * ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★ */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw2lc-0KCGSlrHdgeqpBDjj0VriTuRvM9EYELiWSyiiLqHfv0eUK1WvgmMBKHCGL7eF/exec';
 
@@ -85,15 +92,6 @@ const esc = function (s) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 };
-
-let st = null;            // 최신 status 응답
-let offsetMs = 0;         // 서버(구글) 시각 - 이 기기 시각
-let view = 'loading';     // loading | error | before | open | closed | result
-let switching = false;    // 카운트다운 0 도달 → 화면 전환 중
-let submitting = false;
-let renderedOpenAt = null; // '신청 시작 전' 화면에 그린 오픈 시각 (관리자가 바꾸면 재렌더)
-
-function nowMs() { return Date.now() + offsetMs; }
 function pad(n) { return String(n).padStart(2, '0'); }
 
 /* 서버 기준 한국 시각 표시 (기기 시계 오차와 무관) */
@@ -113,13 +111,64 @@ function fmtRemaining(ms) {
   return (d > 0 ? d + '일 ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s % 60);
 }
 
+let st = null;            // 최신 status 응답
+let offsetMs = 0;         // 서버(구글) 시각 - 이 기기 시각
+let step = 0;             // 0: 개인정보 동의, 1: 안내사항, 2: 신청 화면
+let view = 'consent';     // consent | notice | loading | error | before | open | closed | result
+let switching = false;    // 카운트다운 0 도달 → 화면 전환 중
+let submitting = false;
+let renderedOpenAt = null; // '신청 시작 전' 화면에 그린 오픈 시각 (관리자가 바꾸면 재렌더)
+let statusPromise = null;  // 백엔드 상태 미리 불러오기 (동의·안내 화면 동안 진행)
+
+function nowMs() { return Date.now() + offsetMs; }
 function setView(html) { $('panel').innerHTML = html; }
-function chip(t) { return '<span class="chip">' + esc(t) + '</span>'; }
 function field(label, inner) {
   return '<div class="field"><label>' + label + '</label>' + inner + '</div>';
 }
 
-/* ---------------- 화면 상태별 렌더링 ---------------- */
+/* ---------------- 1단계·2단계 화면 (동의 → 안내) ---------------- */
+
+function gateCard(title, items, checkLabel, onNext) {
+  setView(
+    '<div class="card">' +
+      '<p class="sec-title">' + title + '</p>' +
+      '<div class="agree-box">' +
+        items.map(function (t) { return '<div>' + esc(t) + '</div>'; }).join('') +
+      '</div>' +
+      '<label class="check-row"><input type="checkbox" id="agreeChk"><span>' + checkLabel + '</span></label>' +
+      '<button id="nextBtn" class="btn" disabled>다음</button>' +
+    '</div>'
+  );
+  $('agreeChk').addEventListener('change', function () {
+    $('nextBtn').disabled = !$('agreeChk').checked;
+  });
+  $('nextBtn').addEventListener('click', function () {
+    if (!$('agreeChk').checked) return;
+    onNext();
+  });
+}
+
+function showConsent() {
+  view = 'consent';
+  gateCard('개인정보 수집 및 이용 동의', [
+    '수집하는 개인정보 항목 : 이름과 연락처',
+    '수집 및 이용 목적 : 프로그램 진행 및 팀 구분, 출석 관리',
+    '보유 및 이용기간 : 프로그램 진행 후 폐기'
+  ], '개인정보 수집 및 이용에 동의합니다.', function () {
+    step = 1;
+    showNotice();
+  });
+}
+
+function showNotice() {
+  view = 'notice';
+  gateCard('안내사항', [
+    '기록할 내용은 학번, 학생명, 보호자명, 보호자 연락처입니다.',
+    '중복 신청 또는 신청 내용이 사실과 다를 경우 프로그램 참여가 제한됩니다.'
+  ], '확인했습니다.', enterApp);
+}
+
+/* ---------------- 신청 화면 상태별 렌더링 ---------------- */
 
 function showLoading() {
   view = 'loading';
@@ -130,7 +179,7 @@ function showFatal(msgHtml, retry) {
   view = 'error';
   setView('<div class="box err">' + msgHtml + '</div>' +
     (retry ? '<button class="btn" id="retryBtn">다시 시도</button>' : ''));
-  if (retry) $('retryBtn').addEventListener('click', boot);
+  if (retry) $('retryBtn').addEventListener('click', enterApp);
 }
 
 function showBefore() {
@@ -147,44 +196,47 @@ function showBefore() {
       esc(fmtKst(nowMs(), true)) + '</b></div>' +
     '<div class="clock-row"><span class="lbl">신청 시작</span><b>' + esc(fmtKst(st.openAt, false)) + '</b></div>' +
     '<div class="count-box"><div class="count-lbl">남은 시간</div>' +
-      '<div class="count" id="remain">' + esc(fmtRemaining(st.openAt - nowMs())) + '</div></div>' +
-    '<div class="chips" style="margin-top:12px">' +
-      chip('확정 ' + st.confirmedLimit + '명') + chip('대기 ' + st.waitlistLimit + '명') + '</div>'
+      '<div class="count" id="remain">' + esc(fmtRemaining(st.openAt - nowMs())) + '</div></div>'
   );
 }
 
 function showOpen() {
   view = 'open';
   setView(
-    '<div class="chips" id="chips">' +
-      chip('확정 ' + st.confirmedLimit + '명') + chip('대기 ' + st.waitlistLimit + '명') +
-      chip('현재 ' + st.count + '명 접수') + chip('남은 자리 ' + Math.max(0, st.limit - st.count) + '명') +
-    '</div>' +
-    '<p class="lead small">먼저 신청한 순서대로 접수되며, 접수 후 결과를 문자로 알려드립니다.</p>' +
+    '<p class="lead small">신청한 순서대로 접수되며, 접수 후 결과를 문자메시지로 안내합니다.</p>' +
     '<form id="form" novalidate>' +
-      field('학년', gradeSelect()) +
-      field('반', classSelect()) +
+      field('학번 (예: 1101 - 1학년 1반 1번)',
+        '<input id="f_sid" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">' +
+        '<div class="hint" id="sidHint"></div>') +
       field('학생명', '<input id="f_student" type="text" maxlength="20" placeholder="예: 김일광" autocomplete="off">') +
-      field('보호자명', '<input id="f_guardian" type="text" maxlength="20" placeholder="예: 김학부" autocomplete="off">') +
-      field('보호자 연락처', '<input id="f_phone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-1234-5678" autocomplete="tel">') +
+      field('보호자명', '<input id="f_guardian" type="text" maxlength="20" placeholder="예: 김별빛" autocomplete="off">') +
+      field("보호자 연락처 (숫자만 입력, '-' 자동생성)",
+        '<input id="f_phone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-0000-0000" autocomplete="tel">') +
       '<div id="formErr" class="box err" style="display:none"></div>' +
       '<button id="submitBtn" class="btn" type="submit">신청하기</button>' +
     '</form>'
   );
   $('form').addEventListener('submit', onSubmit);
+  $('f_sid').addEventListener('input', onSidInput);
   $('f_phone').addEventListener('input', onPhoneInput);
 }
 
-function gradeSelect() {
-  let o = '';
-  for (let i = 1; i <= 6; i++) o += '<option value="' + i + '">' + i + '학년</option>';
-  return '<select id="f_grade"><option value="">선택</option>' + o + '</select>';
-}
-
-function classSelect() {
-  let o = '';
-  for (let i = 1; i <= 10; i++) o += '<option value="' + i + '">' + i + '반</option>';
-  return '<select id="f_class"><option value="">선택</option>' + o + '</select>';
+/* 학번 입력: 숫자만 4자리, 입력이 끝나면 "N학년 N반 N번"으로 해석해 보여줌 */
+function onSidInput() {
+  const el = $('f_sid');
+  el.value = el.value.replace(/\D/g, '').slice(0, 4);
+  const h = $('sidHint');
+  const v = el.value;
+  h.className = 'hint';
+  if (v.length < 4) { h.textContent = ''; return; }
+  const g = Number(v.charAt(0)), c = Number(v.charAt(1)), n = Number(v.slice(2));
+  if (g >= 1 && g <= 6 && c >= 1 && c <= 9 && n >= 1 && n <= 99) {
+    h.textContent = g + '학년 ' + c + '반 ' + n + '번';
+    h.className = 'hint ok-hint';
+  } else {
+    h.textContent = '학번을 확인해 주세요 (예: 1101 - 1학년 1반 1번)';
+    h.className = 'hint err-hint';
+  }
 }
 
 function onPhoneInput() {
@@ -199,8 +251,7 @@ function showClosed() {
   view = 'closed';
   setView(
     '<p class="done">신청이 마감되었습니다.</p>' +
-    '<p class="center muted" style="line-height:1.7">확정 ' + st.confirmedLimit + '명 · 대기 ' +
-      st.waitlistLimit + '명 접수가 모두 완료되었습니다.<br>관심 가져 주셔서 감사합니다.</p>'
+    '<p class="center muted" style="line-height:1.7">관심 가져 주셔서 감사합니다.</p>'
   );
 }
 
@@ -232,11 +283,17 @@ function showResult(d) {
   $('againBtn').addEventListener('click', function () {
     view = 'loading';
     setView('<p class="center muted">불러오는 중…</p>');
-    fetchStatus().catch(function () { showFatal('서버에 연결할 수 없습니다.', true); });
+    statusPromise = null;   // 최신 접수 수를 다시 조회
+    loadStatus().catch(function () { showFatal('서버에 연결할 수 없습니다.', true); });
   });
 }
 
 /* ---------------- 서버 통신 ---------------- */
+
+function updateHeader() {
+  $('programTitle').textContent = st.title || '책과 문화의 밤';
+  document.title = (st.title ? st.title + ' · ' : '') + '프로그램 신청';
+}
 
 async function fetchStatus() {
   const t0 = Date.now();
@@ -246,18 +303,29 @@ async function fetchStatus() {
   if (!d || d.ok !== true) throw new Error('bad status');
   offsetMs = d.serverTime - Math.round((t0 + t1) / 2);
   st = d;
-  if (view !== 'result') render();
+  updateHeader();
+  if (step === 2 && view !== 'result') render();
+}
+
+/* 동의·안내 화면 동안 백엔드 상태를 미리 불러온다 (신청 화면 진입 지연 최소화).
+   실패하면 statusPromise를 비워 신청 화면 진입 시 재시도할 수 있게 한다. */
+function loadStatus() {
+  if (!statusPromise) {
+    statusPromise = fetchStatus().catch(function (e) {
+      statusPromise = null;
+      throw e;
+    });
+  }
+  return statusPromise;
 }
 
 function render() {
   if (!st) return;
-  $('programTitle').textContent = st.title || '책과 문화의 밤';
-  document.title = (st.title ? st.title + ' · ' : '') + '프로그램 신청';
+  updateHeader();
   const target = st.phase === 'before' ? 'before' : (st.phase === 'open' ? 'open' : 'closed');
   if (view === target) {
     // 같은 화면이면 다시 그리지 않음 — 30초 폴링이 입력 중인 신청서를 지우지 않도록 함
-    if (target === 'open' && $('chips')) updateChips();
-    else if (target === 'before' && st.openAt !== renderedOpenAt) showBefore();
+    if (target === 'before' && st.openAt !== renderedOpenAt) showBefore();
     return;
   }
   if (target === 'before') showBefore();
@@ -265,30 +333,20 @@ function render() {
   else showClosed();
 }
 
-function updateChips() {
-  $('chips').innerHTML =
-    chip('확정 ' + st.confirmedLimit + '명') + chip('대기 ' + st.waitlistLimit + '명') +
-    chip('현재 ' + st.count + '명 접수') + chip('남은 자리 ' + Math.max(0, st.limit - st.count) + '명');
-}
-
-async function boot() {
-  if (!GAS_URL || GAS_URL.indexOf('http') !== 0) {
-    showFatal('앱이 아직 백엔드에 연결되지 않았습니다.<br>index.html의 GAS_URL 설정을 확인하세요. (상세설정가이드 5단계)', false);
-    return;
-  }
+/* 안내사항 확인 → 신청 화면 진입 (미리 불러둔 상태가 없으면 그때 조회) */
+function enterApp() {
+  step = 2;
+  if (st) { render(); return; }
   showLoading();
-  try {
-    await fetchStatus();
-  } catch (e) {
+  loadStatus().catch(function () {
     showFatal('서버에 연결할 수 없습니다.<br>인터넷 연결을 확인하거나 잠시 후 다시 시도해 주세요.', true);
-  }
+  });
 }
 
 async function onSubmit(e) {
   e.preventDefault();
   if (submitting) return;
-  const grade = $('f_grade').value;
-  const klass = $('f_class').value;
+  const sid = $('f_sid').value;
   const student = $('f_student').value.trim();
   const guardian = $('f_guardian').value.trim();
   const phoneD = $('f_phone').value.replace(/\D/g, '');
@@ -296,7 +354,11 @@ async function onSubmit(e) {
   const fail = function (msg) { err.innerHTML = esc(msg); err.style.display = 'block'; };
   err.style.display = 'none';
 
-  if (!grade || !klass) return fail('학년과 반을 선택해 주세요.');
+  if (!/^\d{4}$/.test(sid)) return fail('학번을 확인해 주세요. (예: 1101 - 1학년 1반 1번)');
+  const g = Number(sid.charAt(0)), c = Number(sid.charAt(1)), n = Number(sid.slice(2));
+  if (g < 1 || g > 6 || c < 1 || c > 9 || n < 1 || n > 99) {
+    return fail('학번을 확인해 주세요. (예: 1101 - 1학년 1반 1번)');
+  }
   if (!student) return fail('학생명을 입력해 주세요.');
   if (!guardian) return fail('보호자명을 입력해 주세요.');
   if (!/^01[016789]\d{7,8}$/.test(phoneD)) return fail('연락처를 확인해 주세요. (예: 010-1234-5678)');
@@ -308,8 +370,8 @@ async function onSubmit(e) {
   btn.textContent = '접수 중…';
   try {
     const q = new URLSearchParams({
-      action: 'submit', grade: grade, class: klass,
-      student: student, guardian: guardian, phone: phoneD, _: String(Date.now())
+      action: 'submit', sid: sid, student: student, guardian: guardian,
+      phone: phoneD, consent: '1', notice: '1', _: String(Date.now())
     });
     const r = await fetch(GAS_URL + '?' + q.toString());
     const d = await r.json();
@@ -327,6 +389,17 @@ async function onSubmit(e) {
     btn.disabled = false;
     btn.textContent = old;
   }
+}
+
+/* ---------------- 시작 ---------------- */
+
+async function boot() {
+  if (!GAS_URL || GAS_URL.indexOf('http') !== 0) {
+    showFatal('앱이 아직 백엔드에 연결되지 않았습니다.<br>index.html의 GAS_URL 설정을 확인하세요. (상세설정가이드 5단계)', false);
+    return;
+  }
+  showConsent();                       // 동의·안내 화면을 먼저 보여주고
+  loadStatus().catch(function () {});  // 그동안 백엔드 상태를 미리 불러온다
 }
 
 /* ---------------- 타이머 ---------------- */
@@ -349,9 +422,9 @@ setInterval(function () {
   }
 }, 1000);
 
-/* 30초마다: 접수 수·마감 여부 갱신 (결과 화면에서는 정지) */
+/* 30초마다: 마감 여부 갱신 (동의·안내 화면과 결과 화면에서는 정지) */
 setInterval(function () {
-  if (!st || view === 'result' || switching || submitting) return;
+  if (step !== 2 || !st || view === 'result' || switching || submitting) return;
   fetchStatus().catch(function () { /* 다음 주기에 재시도 */ });
 }, 30000);
 
