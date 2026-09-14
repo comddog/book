@@ -85,6 +85,13 @@
  * ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★ */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw2lc-0KCGSlrHdgeqpBDjj0VriTuRvM9EYELiWSyiiLqHfv0eUK1WvgmMBKHCGL7eF/exec';
 
+/* ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+ * 빠른 조회용 — 스프레드시트 '현황' 탭 웹 게시 링크 (수정내용2 가이드 3단계)
+ * 여기에 게시 링크를 넣으면 조회가 Apps Script를 거치지 않아 훨씬 빨라집니다.
+ * 비워 두면 기존 방식(GAS 조회)으로 동작하며, 게시 읽기가 실패해도 GAS로 자동 전환됩니다.
+ * ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★ */
+const PUB_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTkUOHGSXJKmCpAFgCyo6Ibj6vgqwGbYv2Uq07jisKNs06UO9qFXUDImzqdFRugJcD0lW4yGNzNxmn2/pubhtml?gid=672284980&single=true';
+
 const $ = function (id) { return document.getElementById(id); };
 const esc = function (s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -287,6 +294,96 @@ function updateHeader() {
   document.title = (st.title ? st.title + ' · ' : '') + '프로그램 신청';
 }
 
+/* ---------------- 상태 조회 ----------------
+ * 기본 경로: '현황' 탭 웹 게시 데이터를 브라우저가 직접 읽음 (Apps Script 기동 대기 없음)
+ * 폴백 경로: 게시 링크 미설정·읽기 실패 시 기존 GAS 조회 (서버 시각 동기화 포함) */
+
+function gvizBase_() {
+  const v = String(PUB_URL || '').trim();
+  if (!v) return '';
+  const m = v.match(/\/d\/e\/([A-Za-z0-9_-]+)/) || v.match(/\/d\/([A-Za-z0-9_-]{20,})/);
+  const id = m ? m[1] : v;
+  return (id.indexOf('2PACX') === 0)
+    ? 'https://docs.google.com/spreadsheets/d/e/' + id + '/gviz/tq'
+    : 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq';
+}
+
+function readStatusPublished() {
+  const base = gvizBase_();
+  if (!base) return Promise.reject(new Error('게시 링크 미설정'));
+  return new Promise(function (resolve, reject) {
+    const cb = 'gvizCb' + Math.floor(Math.random() * 1e9);
+    const s = document.createElement('script');
+    let done = false;
+    const cleanup = function () {
+      clearTimeout(timer);
+      try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+      if (s.parentNode) s.parentNode.removeChild(s);
+    };
+    const finish = function (fn, arg) {
+      if (done) return;
+      done = true;
+      cleanup();
+      fn(arg);
+    };
+    const timer = setTimeout(function () { finish(reject, new Error('조회 시간 초과')); }, 8000);
+    window[cb] = function (d) {
+      try { finish(resolve, parseGviz_(d)); } catch (e) { finish(reject, e); }
+    };
+    s.onerror = function () { finish(reject, new Error('게시 데이터 읽기 실패')); };
+    s.src = base + '?sheet=' + encodeURIComponent('현황') +
+            '&headers=1&tqx=out:json;responseHandler:' + cb + '&_=' + Date.now();
+    document.body.appendChild(s);
+  });
+}
+
+/* gviz 응답 → 기존 status 형식으로 변환 (Code.gs의 판정 로직과 동일 기준) */
+function parseGviz_(d) {
+  const table = d && d.table;
+  if (!table || !table.rows || (d && d.status === 'error')) throw new Error('게시 데이터 형식 오류');
+  const map = {};
+  table.rows.forEach(function (r) {
+    if (!r || !r.c || !r.c[0]) return;
+    const key = String(r.c[0].v == null ? '' : r.c[0].v).trim();
+    if (key) map[key] = r.c[1] ? r.c[1].v : '';
+  });
+  const title = String(map['제목'] || '').trim() || '9월 책과 문화의 밤';
+  const openRaw = String(map['신청시작'] || '').trim();
+  const openMs = parseKstClient_(openRaw);            // 밀리초 | null(미설정) | 'INVALID'
+  const invalid = openRaw !== '' && openMs === 'INVALID';
+  const count = Number(map['접수수']) || 0;
+  const total = Number(map['마감자수']) || 0;
+  const closed = total > 0 && count >= total;
+  let phase;
+  if (invalid) phase = 'before';
+  else if (closed) phase = 'closed';
+  else if (openRaw === '' || openMs === null) phase = 'open';   // 신청시작 미설정 = 즉시 오픈
+  else phase = (Date.now() >= openMs) ? 'open' : 'before';
+  return {
+    ok: true,
+    title: title,
+    phase: phase,
+    openAt: invalid ? null : (openMs === 'INVALID' ? null : openMs),
+    openAtInvalid: invalid,
+    count: count,
+    limit: total,
+    serverTime: Date.now()
+  };
+}
+
+/* "2026-10-05 19:00"·"2026-10-05T19:00"·gviz Date(...) 형태를 KST(UTC+9) 밀리초로 */
+function parseKstClient_(text) {
+  const s = String(text || '').trim();
+  if (!s) return null;
+  const m = s.match(/^Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+  if (m) return Date.UTC(+m[1], +m[2], +m[3], +m[4], +m[5], +m[6]);
+  const t = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!t) return 'INVALID';
+  return Date.UTC(+t[1], +t[2] - 1, +t[3], +(t[4] || 0), +(t[5] || 0), +(t[6] || 0))
+         - 9 * 60 * 60 * 1000;
+}
+
+/* GAS 조회 (폴백) — 응답 시각으로 기기 시계 보정까지 해 줌 */
 async function fetchStatus() {
   const t0 = Date.now();
   const r = await fetch(GAS_URL + '?action=status&_=' + Date.now());
@@ -294,19 +391,27 @@ async function fetchStatus() {
   const t1 = Date.now();
   if (!d || d.ok !== true) throw new Error('bad status');
   offsetMs = d.serverTime - Math.round((t0 + t1) / 2);
+  return d;
+}
+
+function applyStatus(d) {
   st = d;
   updateHeader();
   if (step === 2 && view !== 'result') render();
 }
 
-/* 동의·안내 화면 동안 백엔드 상태를 미리 불러온다 (신청 화면 진입 지연 최소화).
-   실패하면 statusPromise를 비워 신청 화면 진입 시 재시도할 수 있게 한다. */
-function loadStatus() {
+/* 동의·안내 화면 동안 상태를 미리 불러온다 (신청 화면 진입 지연 최소화).
+   실패하면 statusPromise를 비워 다음 시도에서 재조회할 수 있게 한다. */
+function loadStatus(force) {
+  if (force) statusPromise = null;
   if (!statusPromise) {
-    statusPromise = fetchStatus().catch(function (e) {
-      statusPromise = null;
-      throw e;
-    });
+    statusPromise = readStatusPublished()
+      .catch(function () { return fetchStatus(); })   // 게시 실패 → GAS 폴백
+      .then(applyStatus)
+      .catch(function (e) {
+        statusPromise = null;
+        throw e;
+      });
   }
   return statusPromise;
 }
@@ -368,7 +473,7 @@ async function onSubmit(e) {
     const r = await fetch(GAS_URL + '?' + q.toString());
     const d = await r.json();
     if (d && d.ok) { showResult(d); return; }
-    if (d && (d.error === 'FULL' || d.error === 'NOT_OPEN')) { await fetchStatus(); return; }
+    if (d && (d.error === 'FULL' || d.error === 'NOT_OPEN')) { await loadStatus(true); return; }
     if (d && d.error === 'DUPLICATE') {
       fail('이미 접수된 신청입니다. (같은 학생명과 연락처로 중복 접수할 수 없습니다)');
       return;
@@ -408,8 +513,8 @@ setInterval(function () {
     if (rem <= 0 && !switching) {
       switching = true;
       if (remainEl) remainEl.textContent = '신청 시작! 전환 중…';
-      fetchStatus().then(function () { switching = false; })
-                   .catch(function () { switching = false; });
+      loadStatus(true).then(function () { switching = false; })
+                     .catch(function () { switching = false; });
     }
   }
 }, 1000);
@@ -417,7 +522,7 @@ setInterval(function () {
 /* 30초마다: 마감 여부 갱신 (동의·안내 화면과 결과 화면에서는 정지) */
 setInterval(function () {
   if (step !== 2 || !st || view === 'result' || switching || submitting) return;
-  fetchStatus().catch(function () { /* 다음 주기에 재시도 */ });
+  loadStatus(true).catch(function () { /* 다음 주기에 재시도 */ });
 }, 30000);
 
 boot();
