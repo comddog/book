@@ -520,7 +520,7 @@ setInterval(function () {
     if (remainEl) remainEl.textContent = fmtRemaining(rem);
     if (rem <= 0 && !switching) {
       switching = true;
-      if (remainEl) remainEl.textContent = '신청 시작! 전환 중…';
+      if (remainEl) remainEl.textContent = '신청 화면 전환중';
       loadStatus(true).then(function () { switching = false; })
                      .catch(function () { switching = false; });
     }
