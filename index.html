@@ -210,7 +210,7 @@ function showBefore() {
 function showOpen() {
   view = 'open';
   setView(
-    '<p class="lead small">신청한 순서대로 접수되며, 접수 후 결과를 문자메시지로 안내합니다.</p>' +
+    '<p class="lead small">신청한 순서로 접수되며, 결과를 앱과 문자메시지로 안내합니다.</p>' +
     '<form id="form" novalidate>' +
       field('학번 (예: 1101 - 1학년 1반 1번)',
         '<input id="f_sid" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">' +
@@ -481,7 +481,13 @@ async function onSubmit(e) {
     const r = await fetch(GAS_URL + '?' + q.toString());
     const d = await r.json();
     if (d && d.ok) { showResult(d); return; }
-    if (d && (d.error === 'FULL' || d.error === 'NOT_OPEN')) { await loadStatus(true); return; }
+    if (d && (d.error === 'FULL' || d.error === 'NOT_OPEN')) {
+      /* 서버 판정이 최우선 — 게시 데이터 갱신 지연과 무관하게 정확한 상태로 전환 시도 */
+      try { applyStatus(await fetchStatus()); } catch (e2) { /* 전환 실패 시 아래 안내 문구로 커버 */ }
+      /* 화면이 그대로면(갱신 지연 등) 마감·미오픈 안내를 폼 안에 남겨 혼동을 막음 */
+      fail(d.detail || '지금은 접수할 수 없습니다.');
+      return;
+    }
     if (d && d.error === 'DUPLICATE') {
       fail('이미 접수된 신청입니다. (같은 학생명과 연락처로 중복 접수할 수 없습니다)');
       return;
