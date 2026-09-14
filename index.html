@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f45c5">
+<title>프로그램 신청</title>
+<style>
+  :root{
+    --navy:#1e2a5a; --brand:#5b64d8; --primary:#2f45c5;
+    --line:#dfe4f0; --txt:#22263a; --sub:#6b7280; --bg1:#eef2fb; --bg2:#f8fafc;
+    --ok:#0f9d58; --ok-bg:#e8f7ee; --err:#d93025; --err-bg:#fdeceb;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif;
+    color:var(--txt); background:linear-gradient(180deg,var(--bg1),var(--bg2)); min-height:100dvh;
+    display:flex; flex-direction:column}
+  .wrap{width:100%; max-width:430px; margin:0 auto; padding:20px 18px 12px; flex:1; display:flex; flex-direction:column}
+  header{text-align:center; padding:10px 0 18px}
+  .brand{font-size:13px; letter-spacing:.22em; color:var(--brand); font-weight:600}
+  h1{margin:10px 0 0; font-size:27px; line-height:1.3; color:var(--navy); word-break:keep-all}
+  .subtitle{display:inline-block; margin-top:10px; padding:6px 16px; border-radius:999px;
+    background:#e3e8fb; color:var(--primary); font-size:14px; font-weight:700}
+  .card{background:#fff; border-radius:18px; padding:20px 18px; box-shadow:0 8px 24px rgba(30,42,90,.08)}
+  footer{text-align:center; color:#98a1b8; font-size:12.5px; letter-spacing:.08em;
+    padding:20px 0 max(14px, env(safe-area-inset-bottom))}
+  .muted{color:var(--sub)}
+  .center{text-align:center}
+  .lead{text-align:center; font-size:15px; line-height:1.6; margin:8px 0 14px}
+  .lead.small{font-size:13px; color:var(--sub); margin:6px 0 0}
+  .done{text-align:center; font-size:20px; font-weight:800; color:var(--navy); margin:14px 0 8px}
+  .clock-row{display:flex; justify-content:space-between; align-items:baseline; padding:10px 2px; font-size:15px; gap:10px}
+  .clock-row .lbl{color:var(--sub); font-size:14px; flex:none}
+  .clock-row b{font-weight:700; font-variant-numeric:tabular-nums; text-align:right}
+  .count-box{margin-top:12px; background:linear-gradient(135deg,#2f45c5,#5b64d8); border-radius:16px;
+    padding:18px; text-align:center; color:#fff}
+  .count-lbl{font-size:13px; opacity:.85}
+  .count{font-size:34px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:.02em; margin-top:4px}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 2px}
+  .chip{background:#f1f3fb; color:#41508f; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:600}
+  .field{margin:12px 0}
+  .field label{display:block; font-size:13px; color:var(--sub); font-weight:600; margin-bottom:6px}
+  .field input,.field select{width:100%; height:48px; font-size:16px; padding:0 14px;
+    border:1.5px solid var(--line); border-radius:12px; background:#fff; color:var(--txt); outline:none}
+  .field input:focus,.field select:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(47,69,197,.12)}
+  .btn{width:100%; height:52px; margin-top:14px; border:0; border-radius:14px; background:var(--primary);
+    color:#fff; font-size:17px; font-weight:700; cursor:pointer}
+  .btn:disabled{opacity:.55}
+  .btn.ghost{background:#eef1fb; color:var(--primary)}
+  .box{border-radius:12px; padding:12px 14px; font-size:14px; line-height:1.55; margin-top:12px; word-break:keep-all}
+  .box.ok{background:var(--ok-bg); color:#0b7a43}
+  .box.err{background:var(--err-bg); color:var(--err)}
+  .box.warn{background:#fff7e0; color:#8a6d00}
+  .badge{display:block; text-align:center; border-radius:14px; padding:14px; font-weight:800}
+  .ok-badge{background:var(--ok-bg); color:#0b7a43; font-size:15px; padding:8px; margin-bottom:8px}
+  .main-badge{background:linear-gradient(135deg,#2f45c5,#5b64d8); color:#fff; font-size:20px}
+  .note{color:var(--sub); font-size:12px; text-align:right; margin:6px 2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">일광책꿈터 별빛도서관</div>
+    <h1 id="programTitle">책과 문화의 밤</h1>
+    <div class="subtitle">프로그램 신청</div>
+  </header>
+  <main id="panel" class="card"><p class="center muted">불러오는 중…</p></main>
+  <footer>일광초등학교</footer>
+</div>
+<script>
+'use strict';
+
+/* ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+ * 상세설정가이드.md 5단계 — 아래 따옴표 안에 배포된 웹앱 주소(/exec)를 붙여넣으세요.
+ * 예) const GAS_URL = 'https://script.google.com/macros/s/AKfy.../exec';
+ * ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★ */
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw2lc-0KCGSlrHdgeqpBDjj0VriTuRvM9EYELiWSyiiLqHfv0eUK1WvgmMBKHCGL7eF/exec';
+
+const $ = function (id) { return document.getElementById(id); };
+const esc = function (s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+};
+
+let st = null;            // 최신 status 응답
+let offsetMs = 0;         // 서버(구글) 시각 - 이 기기 시각
+let view = 'loading';     // loading | error | before | open | closed | result
+let switching = false;    // 카운트다운 0 도달 → 화면 전환 중
+let submitting = false;
+let renderedOpenAt = null; // '신청 시작 전' 화면에 그린 오픈 시각 (관리자가 바꾸면 재렌더)
+
+function nowMs() { return Date.now() + offsetMs; }
+function pad(n) { return String(n).padStart(2, '0'); }
+
+/* 서버 기준 한국 시각 표시 (기기 시계 오차와 무관) */
+function fmtKst(ms, withSec) {
+  const d = new Date(ms + 9 * 3600 * 1000);
+  const wd = ['일', '월', '화', '수', '목', '금', '토'][d.getUTCDay()];
+  return d.getUTCFullYear() + '년 ' + (d.getUTCMonth() + 1) + '월 ' + d.getUTCDate() +
+    '일 (' + wd + ') ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) +
+    (withSec ? ':' + pad(d.getUTCSeconds()) : '');
+}
+
+function fmtRemaining(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return (d > 0 ? d + '일 ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s % 60);
+}
+
+function setView(html) { $('panel').innerHTML = html; }
+function chip(t) { return '<span class="chip">' + esc(t) + '</span>'; }
+function field(label, inner) {
+  return '<div class="field"><label>' + label + '</label>' + inner + '</div>';
+}
+
+/* ---------------- 화면 상태별 렌더링 ---------------- */
+
+function showLoading() {
+  view = 'loading';
+  setView('<p class="center muted">불러오는 중…</p>');
+}
+
+function showFatal(msgHtml, retry) {
+  view = 'error';
+  setView('<div class="box err">' + msgHtml + '</div>' +
+    (retry ? '<button class="btn" id="retryBtn">다시 시도</button>' : ''));
+  if (retry) $('retryBtn').addEventListener('click', boot);
+}
+
+function showBefore() {
+  view = 'before';
+  renderedOpenAt = st.openAt;
+  if (!st.openAt) {
+    // 신청시작이 설정 오류인 경우 (Code.gs가 안전하게 잠근 상태)
+    setView('<div class="box warn">관리자 설정 확인 중입니다.<br>신청시작 시각 설정에 문제가 있으니 관리자에게 문의해 주세요.</div>');
+    return;
+  }
+  setView(
+    '<p class="lead">아직 신청 시간이 아닙니다.<br>신청은 아래 시각에 시작됩니다.</p>' +
+    '<div class="clock-row"><span class="lbl">현재 시각</span><b id="nowClock">' +
+      esc(fmtKst(nowMs(), true)) + '</b></div>' +
+    '<div class="clock-row"><span class="lbl">신청 시작</span><b>' + esc(fmtKst(st.openAt, false)) + '</b></div>' +
+    '<div class="count-box"><div class="count-lbl">남은 시간</div>' +
+      '<div class="count" id="remain">' + esc(fmtRemaining(st.openAt - nowMs())) + '</div></div>' +
+    '<div class="chips" style="margin-top:12px">' +
+      chip('확정 ' + st.confirmedLimit + '명') + chip('대기 ' + st.waitlistLimit + '명') + '</div>'
+  );
+}
+
+function showOpen() {
+  view = 'open';
+  setView(
+    '<div class="chips" id="chips">' +
+      chip('확정 ' + st.confirmedLimit + '명') + chip('대기 ' + st.waitlistLimit + '명') +
+      chip('현재 ' + st.count + '명 접수') + chip('남은 자리 ' + Math.max(0, st.limit - st.count) + '명') +
+    '</div>' +
+    '<p class="lead small">먼저 신청한 순서대로 접수되며, 접수 후 결과를 문자로 알려드립니다.</p>' +
+    '<form id="form" novalidate>' +
+      field('학년', gradeSelect()) +
+      field('반', classSelect()) +
+      field('학생명', '<input id="f_student" type="text" maxlength="20" placeholder="예: 김일광" autocomplete="off">') +
+      field('보호자명', '<input id="f_guardian" type="text" maxlength="20" placeholder="예: 김학부" autocomplete="off">') +
+      field('보호자 연락처', '<input id="f_phone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-1234-5678" autocomplete="tel">') +
+      '<div id="formErr" class="box err" style="display:none"></div>' +
+      '<button id="submitBtn" class="btn" type="submit">신청하기</button>' +
+    '</form>'
+  );
+  $('form').addEventListener('submit', onSubmit);
+  $('f_phone').addEventListener('input', onPhoneInput);
+}
+
+function gradeSelect() {
+  let o = '';
+  for (let i = 1; i <= 6; i++) o += '<option value="' + i + '">' + i + '학년</option>';
+  return '<select id="f_grade"><option value="">선택</option>' + o + '</select>';
+}
+
+function classSelect() {
+  let o = '';
+  for (let i = 1; i <= 10; i++) o += '<option value="' + i + '">' + i + '반</option>';
+  return '<select id="f_class"><option value="">선택</option>' + o + '</select>';
+}
+
+function onPhoneInput() {
+  const el = $('f_phone');
+  const d = el.value.replace(/\D/g, '').slice(0, 11);
+  if (d.length > 7) el.value = d.slice(0, 3) + '-' + d.slice(3, 7) + '-' + d.slice(7);
+  else if (d.length > 3) el.value = d.slice(0, 3) + '-' + d.slice(3);
+  else el.value = d;
+}
+
+function showClosed() {
+  view = 'closed';
+  setView(
+    '<p class="done">신청이 마감되었습니다.</p>' +
+    '<p class="center muted" style="line-height:1.7">확정 ' + st.confirmedLimit + '명 · 대기 ' +
+      st.waitlistLimit + '명 접수가 모두 완료되었습니다.<br>관심 가져 주셔서 감사합니다.</p>'
+  );
+}
+
+function showResult(d) {
+  view = 'result';
+  /* 서버(구글) 시각으로 기록된 제출 시각을 '년월일시분초'로 표시 */
+  const m = String(d.submittedAt || '').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+  const ts = m
+    ? m[1] + '년 ' + Number(m[2]) + '월 ' + Number(m[3]) + '일 ' +
+      m[4] + '시 ' + m[5] + '분 ' + m[6] + '초'
+    : esc(d.submittedAt || '');
+  const digits = String($('f_phone') ? $('f_phone').value : '').replace(/\D/g, '');
+  const masked = digits ? digits.slice(0, 3) + '-****-' + digits.slice(-4) : '';
+  const badge = d.confirmed
+    ? '선착순 ' + d.order + '번 확정'
+    : '대기자 ' + d.waitlistOrder + '번 배정';
+  setView(
+    '<div class="badge ok-badge">접수 완료!</div>' +
+    '<div class="badge main-badge">' + esc(badge) + '</div>' +
+    '<div class="clock-row" style="margin-top:12px"><span class="lbl">제출 시각</span><b>' + ts + '</b></div>' +
+    '<p class="note">인터넷 시간 기준</p>' +
+    '<div class="box ' + (d.smsSent ? 'ok' : 'warn') + '">' +
+      (d.smsSent
+        ? '보호자 연락처(' + esc(masked) + ')로 접수 문자를 발송했습니다.'
+        : '접수는 완료되었지만 문자 발송에 실패했습니다.<br>관리자에게 문의해 주세요.') +
+    '</div>' +
+    '<button class="btn ghost" id="againBtn">다른 학생 신청하기</button>'
+  );
+  $('againBtn').addEventListener('click', function () {
+    view = 'loading';
+    setView('<p class="center muted">불러오는 중…</p>');
+    fetchStatus().catch(function () { showFatal('서버에 연결할 수 없습니다.', true); });
+  });
+}
+
+/* ---------------- 서버 통신 ---------------- */
+
+async function fetchStatus() {
+  const t0 = Date.now();
+  const r = await fetch(GAS_URL + '?action=status&_=' + Date.now());
+  const d = await r.json();
+  const t1 = Date.now();
+  if (!d || d.ok !== true) throw new Error('bad status');
+  offsetMs = d.serverTime - Math.round((t0 + t1) / 2);
+  st = d;
+  if (view !== 'result') render();
+}
+
+function render() {
+  if (!st) return;
+  $('programTitle').textContent = st.title || '책과 문화의 밤';
+  document.title = (st.title ? st.title + ' · ' : '') + '프로그램 신청';
+  const target = st.phase === 'before' ? 'before' : (st.phase === 'open' ? 'open' : 'closed');
+  if (view === target) {
+    // 같은 화면이면 다시 그리지 않음 — 30초 폴링이 입력 중인 신청서를 지우지 않도록 함
+    if (target === 'open' && $('chips')) updateChips();
+    else if (target === 'before' && st.openAt !== renderedOpenAt) showBefore();
+    return;
+  }
+  if (target === 'before') showBefore();
+  else if (target === 'open') showOpen();
+  else showClosed();
+}
+
+function updateChips() {
+  $('chips').innerHTML =
+    chip('확정 ' + st.confirmedLimit + '명') + chip('대기 ' + st.waitlistLimit + '명') +
+    chip('현재 ' + st.count + '명 접수') + chip('남은 자리 ' + Math.max(0, st.limit - st.count) + '명');
+}
+
+async function boot() {
+  if (!GAS_URL || GAS_URL.indexOf('http') !== 0) {
+    showFatal('앱이 아직 백엔드에 연결되지 않았습니다.<br>index.html의 GAS_URL 설정을 확인하세요. (상세설정가이드 5단계)', false);
+    return;
+  }
+  showLoading();
+  try {
+    await fetchStatus();
+  } catch (e) {
+    showFatal('서버에 연결할 수 없습니다.<br>인터넷 연결을 확인하거나 잠시 후 다시 시도해 주세요.', true);
+  }
+}
+
+async function onSubmit(e) {
+  e.preventDefault();
+  if (submitting) return;
+  const grade = $('f_grade').value;
+  const klass = $('f_class').value;
+  const student = $('f_student').value.trim();
+  const guardian = $('f_guardian').value.trim();
+  const phoneD = $('f_phone').value.replace(/\D/g, '');
+  const err = $('formErr');
+  const fail = function (msg) { err.innerHTML = esc(msg); err.style.display = 'block'; };
+  err.style.display = 'none';
+
+  if (!grade || !klass) return fail('학년과 반을 선택해 주세요.');
+  if (!student) return fail('학생명을 입력해 주세요.');
+  if (!guardian) return fail('보호자명을 입력해 주세요.');
+  if (!/^01[016789]\d{7,8}$/.test(phoneD)) return fail('연락처를 확인해 주세요. (예: 010-1234-5678)');
+
+  const btn = $('submitBtn');
+  submitting = true;
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = '접수 중…';
+  try {
+    const q = new URLSearchParams({
+      action: 'submit', grade: grade, class: klass,
+      student: student, guardian: guardian, phone: phoneD, _: String(Date.now())
+    });
+    const r = await fetch(GAS_URL + '?' + q.toString());
+    const d = await r.json();
+    if (d && d.ok) { showResult(d); return; }
+    if (d && (d.error === 'FULL' || d.error === 'NOT_OPEN')) { await fetchStatus(); return; }
+    if (d && d.error === 'DUPLICATE') {
+      fail('이미 접수된 신청입니다. (같은 학생명과 연락처로 중복 접수할 수 없습니다)');
+      return;
+    }
+    fail((d && d.detail) || '접수에 실패했습니다. 다시 시도해 주세요.');
+  } catch (err2) {
+    fail('네트워크 오류입니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+  } finally {
+    submitting = false;
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
+/* ---------------- 타이머 ---------------- */
+
+/* 1초마다: 신청 전 화면의 현재 시각·남은 시간 갱신, 시작 시각 도달 시 즉시 전환 */
+setInterval(function () {
+  if (!st) return;
+  if (view === 'before' && st.openAt) {
+    const rem = st.openAt - nowMs();
+    const clockEl = $('nowClock');
+    const remainEl = $('remain');
+    if (clockEl) clockEl.textContent = fmtKst(nowMs(), true);
+    if (remainEl) remainEl.textContent = fmtRemaining(rem);
+    if (rem <= 0 && !switching) {
+      switching = true;
+      if (remainEl) remainEl.textContent = '신청 시작! 전환 중…';
+      fetchStatus().then(function () { switching = false; })
+                   .catch(function () { switching = false; });
+    }
+  }
+}, 1000);
+
+/* 30초마다: 접수 수·마감 여부 갱신 (결과 화면에서는 정지) */
+setInterval(function () {
+  if (!st || view === 'result' || switching || submitting) return;
+  fetchStatus().catch(function () { /* 다음 주기에 재시도 */ });
+}, 30000);
+
+boot();
+</script>
+</body>
+</html>

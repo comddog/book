@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f45c5">
+<title>관리자 모드</title>
+<style>
+  :root{
+    --navy:#1e2a5a; --brand:#5b64d8; --primary:#2f45c5;
+    --line:#dfe4f0; --txt:#22263a; --sub:#6b7280; --bg1:#eef2fb; --bg2:#f8fafc;
+    --ok:#0f9d58; --ok-bg:#e8f7ee; --err:#d93025; --err-bg:#fdeceb;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif;
+    color:var(--txt); background:linear-gradient(180deg,var(--bg1),var(--bg2)); min-height:100dvh;
+    display:flex; flex-direction:column}
+  .wrap{width:100%; max-width:430px; margin:0 auto; padding:20px 18px 12px; flex:1; display:flex; flex-direction:column}
+  header{text-align:center; padding:10px 0 18px}
+  .brand{font-size:13px; letter-spacing:.22em; color:var(--brand); font-weight:600}
+  h1{margin:10px 0 0; font-size:27px; line-height:1.3; color:var(--navy); word-break:keep-all}
+  .subtitle{display:inline-block; margin-top:10px; padding:6px 16px; border-radius:999px;
+    background:#e3e8fb; color:var(--primary); font-size:14px; font-weight:700}
+  .card{background:#fff; border-radius:18px; padding:20px 18px; box-shadow:0 8px 24px rgba(30,42,90,.08)}
+  main{flex:1; display:flex; flex-direction:column; gap:14px}
+  footer{text-align:center; color:#98a1b8; font-size:12.5px; letter-spacing:.08em;
+    padding:20px 0 max(14px, env(safe-area-inset-bottom))}
+  .muted{color:var(--sub)}
+  .center{text-align:center}
+  .sec-title{font-size:13px; font-weight:800; color:var(--navy); letter-spacing:.06em; margin:0 0 8px}
+  .sum-row{display:flex; justify-content:space-between; align-items:baseline; padding:9px 2px;
+    font-size:14.5px; gap:10px; border-bottom:1px solid #f0f2fa}
+  .sum-row:last-child{border-bottom:0}
+  .sum-row .k{color:var(--sub); flex:none}
+  .sum-row .v{font-weight:700; font-variant-numeric:tabular-nums; text-align:right; word-break:keep-all}
+  .sum-row .v .em{color:var(--primary); font-size:16px}
+  .field{margin:12px 0}
+  .field label{display:block; font-size:13px; color:var(--sub); font-weight:600; margin-bottom:6px}
+  .field input,.field select{width:100%; height:48px; font-size:16px; padding:0 14px;
+    border:1.5px solid var(--line); border-radius:12px; background:#fff; color:var(--txt); outline:none}
+  .field input:focus,.field select:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(47,69,197,.12)}
+  .hint{font-size:12px; color:#98a1b8; margin-top:5px; line-height:1.5}
+  .row2{display:flex; gap:10px}
+  .row2 .field{flex:1; margin-top:0}
+  .btn{width:100%; height:52px; margin-top:14px; border:0; border-radius:14px; background:var(--primary);
+    color:#fff; font-size:17px; font-weight:700; cursor:pointer}
+  .btn:disabled{opacity:.55}
+  .btn.ghost{background:#eef1fb; color:var(--primary)}
+  .btn.mini{height:40px; font-size:14px; margin-top:10px}
+  .box{border-radius:12px; padding:12px 14px; font-size:14px; line-height:1.55; margin-top:12px; word-break:keep-all}
+  .box.ok{background:var(--ok-bg); color:#0b7a43}
+  .box.err{background:var(--err-bg); color:var(--err)}
+  .box.info{background:#f1f3fb; color:#41508f}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">일광책꿈터 별빛도서관</div>
+    <h1>관리자 모드</h1>
+    <div class="subtitle">프로그램 설정 · 접수 현황</div>
+  </header>
+  <main id="panel">
+    <div class="card"><p class="center muted">불러오는 중…</p></div>
+  </main>
+  <footer>일광초등학교</footer>
+</div>
+<script>
+'use strict';
+
+/* ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+ * 상세설정가이드.md 5단계 — 아래 따옴표 안에 배포된 웹앱 주소(/exec)를 붙여넣으세요.
+ * (index.html과 같은 주소입니다)
+ * ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★ */
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw2lc-0KCGSlrHdgeqpBDjj0VriTuRvM9EYELiWSyiiLqHfv0eUK1WvgmMBKHCGL7eF/exec';
+
+const $ = function (id) { return document.getElementById(id); };
+const esc = function (s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+};
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function fmtKst(ms, withSec) {
+  const d = new Date(ms + 9 * 3600 * 1000);
+  const wd = ['일', '월', '화', '수', '목', '금', '토'][d.getUTCDay()];
+  return d.getUTCFullYear() + '년 ' + (d.getUTCMonth() + 1) + '월 ' + d.getUTCDate() +
+    '일 (' + wd + ') ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) +
+    (withSec ? ':' + pad(d.getUTCSeconds()) : '');
+}
+
+let pw = '';
+let data = null;          // admin_get 응답 (values / effective / count)
+let autoTotal = true;     // 마감자수 자동 계산(모집+대기) 사용 중
+let busy = false;
+
+function setPanel(html) { $('panel').innerHTML = html; }
+
+async function api(params) {
+  const q = new URLSearchParams(Object.assign({ _: String(Date.now()) }, params));
+  const r = await fetch(GAS_URL + '?' + q.toString());
+  return await r.json();
+}
+
+/* ---------------- 비밀번호 게이트 ---------------- */
+
+function showGate(msg) {
+  setPanel(
+    '<div class="card">' +
+      '<div class="field"><label>접속 비밀번호</label>' +
+        '<input id="pwInput" type="password" inputmode="text" autocomplete="current-password" placeholder="비밀번호 입력">' +
+      '</div>' +
+      (msg ? '<div class="box err">' + esc(msg) + '</div>' : '') +
+      '<button id="loginBtn" class="btn" style="margin-top:4px">접속</button>' +
+    '</div>'
+  );
+  $('loginBtn').addEventListener('click', login);
+  $('pwInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+  $('pwInput').focus();
+}
+
+async function login() {
+  if (busy) return;
+  const v = $('pwInput') ? $('pwInput').value : '';
+  if (!v) {
+    if ($('pwInput')) $('pwInput').focus();
+    return;
+  }
+  busy = true;
+  const btn = $('loginBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '확인 중…'; }
+  try {
+    const d = await api({ action: 'admin_get', pass: v });
+    if (d && d.ok) {
+      pw = v;
+      try { sessionStorage.setItem('ilgwang_pw', pw); } catch (e) {}
+      data = d;
+      showMain();
+    } else {
+      showGate((d && d.detail) || '비밀번호가 올바르지 않습니다.');
+    }
+  } catch (e) {
+    showGate('서버에 연결할 수 없습니다. GAS_URL 설정과 인터넷 연결을 확인하세요.');
+  } finally {
+    busy = false;
+  }
+}
+
+/* ---------------- 설정 화면 ---------------- */
+
+function phaseOf() {
+  if (!data) return '';
+  const e = data.effective;
+  const now = Date.now();
+  if (e.openAtInvalid) return '설정 오류 — 신청시작 형식 확인 필요';
+  if (data.count >= e.total) return '신청 마감';
+  if (e.openAtMs === null) return '신청 진행 중 (시작 시각 미설정 → 즉시 오픈)';
+  if (now < e.openAtMs) return '신청 시작 전 · ' + fmtKst(e.openAtMs, false) + ' 오픈';
+  return '신청 진행 중';
+}
+
+function renderSummary() {
+  const e = data.effective;
+  const row = function (k, v) {
+    return '<div class="sum-row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+  };
+  $('sumList').innerHTML =
+    row('적용 제목', esc(e.title)) +
+    row('신청 시작', e.openAtInvalid ? '<span class="muted">형식 오류</span>'
+        : (e.openAtMs === null ? '미설정 (즉시 오픈)' : esc(fmtKst(e.openAtMs, false)))) +
+    row('모집인원(확정)', e.confirmed + '명') +
+    row('대기자수', e.waitlist + '명') +
+    row('마감자수', e.total + '명') +
+    row('현재 접수', '<span class="em">' + data.count + '명</span>') +
+    row('남은 자리', Math.max(0, e.total - data.count) + '명') +
+    row('상태', esc(phaseOf()));
+}
+
+/* 시트 원본 "2026-10-05 19:00[:ss]" → datetime-local 값 "2026-10-05T19:00" */
+function openToLocal(s) {
+  const m = String(s || '').match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})[ T](\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  return m[1] + '-' + pad(Number(m[2])) + '-' + pad(Number(m[3])) + 'T' +
+    pad(Number(m[4])) + ':' + m[5];
+}
+
+function showMain() {
+  const v = data.values;
+  const e = data.effective;
+  setPanel(
+    '<div class="card">' +
+      '<p class="sec-title">현재 운영 현황</p>' +
+      '<div id="sumList"></div>' +
+    '</div>' +
+    '<div class="card">' +
+      '<p class="sec-title">설정 변경</p>' +
+      '<div class="field"><label>제목</label>' +
+        '<input id="s_title" type="text" maxlength="60" value="' + esc(v.title) + '" ' +
+          'placeholder="' + esc(v.title ? '' : e.title) + '">' +
+      '</div>' +
+      '<div class="field"><label>신청시작 (날짜와 시각)</label>' +
+        '<input id="s_open" type="datetime-local" value="' + esc(openToLocal(v.open)) + '">' +
+        '<div class="hint">이 시각 전까지는 신청 화면에 카운트다운이 표시됩니다. 비워 두면 저장 즉시 신청이 열립니다.</div>' +
+      '</div>' +
+      '<div class="row2">' +
+        '<div class="field"><label>모집인원</label>' +
+          '<input id="s_cap" type="number" min="1" inputmode="numeric" value="' + esc(v.confirmed) + '" ' +
+            'placeholder="' + e.confirmed + '">' +
+        '</div>' +
+        '<div class="field"><label>대기자수</label>' +
+          '<input id="s_wait" type="number" min="0" inputmode="numeric" value="' + esc(v.waitlist) + '" ' +
+            'placeholder="' + e.waitlist + '">' +
+        '</div>' +
+      '</div>' +
+      '<div class="field"><label>신청 마감자수</label>' +
+        '<input id="s_total" type="number" min="1" inputmode="numeric" value="' + esc(v.total) + '" ' +
+          'placeholder="' + e.total + '">' +
+        '<div class="hint">모집인원·대기자수를 바꾸면 자동으로 (모집+대기)로 채워집니다. 직접 수정도 가능합니다.</div>' +
+      '</div>' +
+      '<div id="saveMsg"></div>' +
+      '<button id="saveBtn" class="btn" style="margin-top:4px">설정 저장</button>' +
+    '</div>' +
+    '<div class="card">' +
+      '<p class="sec-title">접수 내역 · 초기화</p>' +
+      '<div class="box info" style="margin-top:0">접수 내역은 이 스크립트가 연결된 <b>구글 스프레드시트의 『신청목록』 시트</b>에 접수순으로 기록됩니다.<br>' +
+      '· 기록 행(2행부터)을 지우면 접수수가 <b>0으로 초기화</b>됩니다. (1행 제목은 지우지 마세요)<br>' +
+      '· 문자 발송 결과도 각 행의 『문자발송』 열에서 확인할 수 있습니다.</div>' +
+      '<button id="lockBtn" class="btn ghost mini">비밀번호 다시 입력하기</button>' +
+    '</div>'
+  );
+  renderSummary();
+  $('saveBtn').addEventListener('click', save);
+  $('lockBtn').addEventListener('click', function () {
+    try { sessionStorage.removeItem('ilgwang_pw'); } catch (e2) {}
+    pw = '';
+    showGate('');
+  });
+  $('s_cap').addEventListener('input', syncTotal);
+  $('s_wait').addEventListener('input', syncTotal);
+  $('s_total').addEventListener('input', function () { autoTotal = false; });
+}
+
+function syncTotal() {
+  if (!autoTotal) return;
+  const cap = Number(String($('s_cap').value).replace(/[^0-9]/g, '') || 0);
+  const wait = Number(String($('s_wait').value).replace(/[^0-9]/g, '') || 0);
+  if (cap > 0) $('s_total').value = cap + wait;
+}
+
+function saveMsg(kind, html) {
+  $('saveMsg').innerHTML = '<div class="box ' + kind + '">' + html + '</div>';
+}
+
+async function save() {
+  if (busy) return;
+  const title = $('s_title').value.trim();
+  const open = $('s_open').value || '';
+  const digits = function (s) { return String(s).replace(/[^0-9]/g, ''); };
+  const cap = digits($('s_cap').value);
+  const wait = digits($('s_wait').value);
+  const total = digits($('s_total').value);
+
+  if (!title) return saveMsg('err', '제목을 입력해 주세요.');
+  if (!cap || Number(cap) < 1) return saveMsg('err', '모집인원을 1명 이상으로 입력해 주세요.');
+  if (total !== '' && Number(total) < Number(cap)) {
+    return saveMsg('err', '신청 마감자수는 모집인원보다 크거나 같아야 합니다.');
+  }
+  if (!open && !confirm('신청시작을 비워 두면 저장 즉시 신청이 열립니다. 계속할까요?')) return;
+
+  busy = true;
+  const btn = $('saveBtn');
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = '저장 중…';
+  try {
+    const d = await api({
+      action: 'admin_save', pass: pw,
+      title: title, open: open,
+      confirmed: cap, waitlist: wait, total: total
+    });
+    if (d && d.ok) {
+      data.effective = d.effective;
+      data.values = {
+        title: title,
+        open: open.replace('T', ' '),
+        confirmed: cap, waitlist: wait, total: total
+      };
+      renderSummary();
+      saveMsg('ok', esc(d.message || '저장되었습니다.'));
+    } else {
+      saveMsg('err', esc((d && d.detail) || '저장에 실패했습니다.'));
+    }
+  } catch (e) {
+    saveMsg('err', '서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.');
+  } finally {
+    busy = false;
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
+/* ---------------- 시작 ---------------- */
+
+function showFatal(msg) {
+  setPanel('<div class="card"><div class="box err" style="margin-top:0">' + msg + '</div></div>');
+}
+
+async function boot() {
+  if (!GAS_URL || GAS_URL.indexOf('http') !== 0) {
+    showFatal('앱이 아직 백엔드에 연결되지 않았습니다.<br>admin.html의 GAS_URL 설정을 확인하세요. (상세설정가이드 5단계)');
+    return;
+  }
+  let saved = '';
+  try { saved = sessionStorage.getItem('ilgwang_pw') || ''; } catch (e) {}
+  if (saved) {
+    try {
+      const d = await api({ action: 'admin_get', pass: saved });
+      if (d && d.ok) { pw = saved; data = d; showMain(); return; }
+    } catch (e) { /* 아래에서 게이트 표시 */ }
+    try { sessionStorage.removeItem('ilgwang_pw'); } catch (e2) {}
+  }
+  showGate('');
+}
+
+boot();
+</script>
+</body>
+</html>
