@@ -139,7 +139,7 @@ function gateCard(title, items, checkLabel, onNext) {
     '<div class="card">' +
       '<p class="sec-title">' + title + '</p>' +
       '<div class="agree-box">' +
-        items.map(function (t) { return '<div>' + esc(t) + '</div>'; }).join('') +
+        items.map(function (t, i) { return '<div>' + (i + 1) + '. ' + esc(t) + '</div>'; }).join('') +
       '</div>' +
       '<label class="check-row"><input type="checkbox" id="agreeChk"><span>' + checkLabel + '</span></label>' +
       '<button id="nextBtn" class="btn" disabled>다음</button>' +
@@ -170,7 +170,8 @@ function showNotice() {
   view = 'notice';
   gateCard('안내사항', [
     '기록할 내용은 학번, 학생명, 보호자명, 보호자 연락처입니다.',
-    '중복 신청 또는 신청 내용이 사실과 다를 경우 프로그램 참여가 제한됩니다.'
+    '중복 신청 또는 신청 내용이 사실과 다를 경우 프로그램 참여가 제한됩니다.',
+    '단말기 또는 인터넷 환경으로 접속에 지연이 발생할 수 있습니다.'
   ], '확인했습니다.', enterApp);
 }
 
