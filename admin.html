@@ -100,10 +100,16 @@ let busy = false;
 
 function setPanel(html) { $('panel').innerHTML = html; }
 
-async function api(params) {
+async function api(params, timeoutMs) {
   const q = new URLSearchParams(Object.assign({ _: String(Date.now()) }, params));
-  const r = await fetch(GAS_URL + '?' + q.toString());
-  return await r.json();
+  const ctrl = timeoutMs ? new AbortController() : null;
+  const t = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
+  try {
+    const r = await fetch(GAS_URL + '?' + q.toString(), ctrl ? { signal: ctrl.signal } : undefined);
+    return await r.json();
+  } finally {
+    if (t) clearTimeout(t);
+  }
 }
 
 /* 콜드 스타트 예열 — 게이트가 뜨는 즉시 GAS를 백그라운드로 깨워 둔다.
@@ -140,16 +146,29 @@ async function login() {
   const btn = $('loginBtn');
   if (btn) { btn.disabled = true; btn.textContent = '확인 중…'; }
   try {
-    const d = await api({ action: 'admin_get', pass: v });
+    /* 서버가 잠들어 있으면 첫 요청이 실패할 수 있으므로 최대 3회 시도(1.5초·3초 대기).
+       재시도 시점에는 서버가 기동 중이라 대부분 성공한다. */
+    let d = null;
+    for (let i = 0; i < 3; i++) {
+      try {
+        d = await api({ action: 'admin_get', pass: v }, 15000);
+        break;
+      } catch (e) {
+        d = null;
+        if (i < 2) await new Promise(function (r) { setTimeout(r, 1500 + i * 1500); });
+      }
+    }
     if (d && d.ok) {
       pw = v;
       try { sessionStorage.setItem('ilgwang_pw', pw); } catch (e) {}
       data = d;
       showMain();
-    } else {
+    } else if (d && !d.ok) {
       showGate((d && d.detail) || '비밀번호가 올바르지 않습니다.');
+    } else {
+      showGate('서버에 연결할 수 없습니다. GAS_URL 설정과 인터넷 연결을 확인하세요.');
     }
-  } catch (e) {
+  } catch (e2) {
     showGate('서버에 연결할 수 없습니다. GAS_URL 설정과 인터넷 연결을 확인하세요.');
   } finally {
     busy = false;
