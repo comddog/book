@@ -157,8 +157,8 @@ function gateCard(title, items, checkLabel, onNext) {
 function showConsent() {
   view = 'consent';
   gateCard('개인정보 수집 및 이용 동의', [
-    '수집하는 개인정보 항목 : 학번, 이름, 연락처',
-    '수집 및 이용 목적 : 프로그램 진행, 팀 구분, 출석 관리',
+    '수집하는 개인정보 항목 : 이름과 연락처',
+    '수집 및 이용 목적 : 프로그램 진행 및 팀 구분, 출석 관리',
     '보유 및 이용기간 : 프로그램 진행 후 폐기'
   ], '개인정보 수집 및 이용에 동의합니다.', function () {
     step = 1;
@@ -171,7 +171,7 @@ function showNotice() {
   gateCard('안내사항', [
     '기록할 내용은 학번, 학생명, 보호자명, 보호자 연락처입니다.',
     '중복 신청 또는 신청 내용이 사실과 다를 경우 프로그램 참여가 제한됩니다.',
-    '이용자 단말기의 캐시 상태나 네트워크 환경에 따라 접속이 지연될 수 있습니다.'
+    '단말기 또는 인터넷 환경으로 접속에 지연이 발생할 수 있습니다.'
   ], '확인했습니다.', enterApp);
 }
 
@@ -396,10 +396,19 @@ async function fetchStatus() {
   return d;
 }
 
-/* 서버 시각 보정 — 저주기(10분)로만 GAS를 호출해 기기 시계 오차를 줄인다.
-   상태 조회는 계속 gviz(빠른 경로)를 쓰고, 여기서는 offsetMs 갱신만 사용한다. */
+/* 서버 시각 보정 + 게시 데이터 교차 확인 — 앱 열 때와 10분마다 GAS를 호출한다.
+   상태 조회는 계속 게시 데이터(빠른 경로)를 쓰고, 여기서는
+   ① 기기 시계 오차(offsetMs) 갱신
+   ② 게시 스냅샷이 늦게 갱신돼 신청시작·제목·마감 여부가 어긋나 있으면 GAS 기준값으로 교정
+   두 가지를 한다. */
 async function syncClock() {
-  await fetchStatus();
+  const d = await fetchStatus();          // offsetMs 갱신은 fetchStatus 내부에서 처리
+  if (!st) { applyStatus(d); return; }    // 게시 조회가 아직 없으면 GAS 값으로 채움
+  const same = st.title === d.title &&
+               st.openAt === d.openAt &&
+               !!st.openAtInvalid === !!d.openAtInvalid &&
+               st.phase === d.phase;
+  if (!same) applyStatus(d);              // 어긋남 → 서버 기준으로 교정 (스냅샷 지연 해소)
 }
 
 function applyStatus(d) {
