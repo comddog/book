@@ -72,7 +72,7 @@
 'use strict';
 
 /* ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
- * 상세설정가이드.md 5단계 — 아래 따옴표 안에 배포된 웹앱 주소(/exec)를 붙여넣으세요.
+ * 설정가이드.md 5단계 — 아래 따옴표 안에 배포된 웹앱 주소(/exec)를 붙여넣으세요.
  * (index.html과 같은 주소입니다)
  * ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★ */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw2lc-0KCGSlrHdgeqpBDjj0VriTuRvM9EYELiWSyiiLqHfv0eUK1WvgmMBKHCGL7eF/exec';
@@ -104,6 +104,12 @@ async function api(params) {
   const q = new URLSearchParams(Object.assign({ _: String(Date.now()) }, params));
   const r = await fetch(GAS_URL + '?' + q.toString());
   return await r.json();
+}
+
+/* 콜드 스타트 예열 — 게이트가 뜨는 즉시 GAS를 백그라운드로 깨워 둔다.
+   비밀번호를 입력하는 몇 초 동안 서버가 기동되어 [접속]이 빨라진다. 결과는 버린다. */
+function warmUp() {
+  fetch(GAS_URL + '?action=status&_=' + Date.now()).catch(function () {});
 }
 
 /* ---------------- 비밀번호 게이트 ---------------- */
@@ -237,7 +243,8 @@ function showMain() {
   $('lockBtn').addEventListener('click', function () {
     try { sessionStorage.removeItem('ilgwang_pw'); } catch (e2) {}
     pw = '';
-    showGate('');
+  warmUp();      // 비밀번호 입력 시간 동안 GAS를 미리 깨워 둠 (콜드 스타트 예열)
+  showGate('');
   });
   $('s_cap').addEventListener('input', syncTotal);
   $('s_wait').addEventListener('input', syncTotal);
@@ -311,7 +318,7 @@ function showFatal(msg) {
 
 async function boot() {
   if (!GAS_URL || GAS_URL.indexOf('http') !== 0) {
-    showFatal('앱이 아직 백엔드에 연결되지 않았습니다.<br>admin.html의 GAS_URL 설정을 확인하세요. (상세설정가이드 5단계)');
+    showFatal('앱이 아직 백엔드에 연결되지 않았습니다.<br>admin.html의 GAS_URL 설정을 확인하세요. (설정가이드 5단계)');
     return;
   }
   let saved = '';
