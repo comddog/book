@@ -357,7 +357,8 @@ function parseCsvStatus_(text) {
   const invalid = openRaw !== '' && openMs === 'INVALID';
   const count = Number(map['접수수']) || 0;
   const total = Number(map['마감자수']) || 0;
-  const closed = total > 0 && count >= total;
+  const manual = String(map['수동마감'] || '').trim() === '1';
+  const closed = manual || (total > 0 && count >= total);
   let phase;
   if (invalid) phase = 'before';
   else if (closed) phase = 'closed';
@@ -371,7 +372,8 @@ function parseCsvStatus_(text) {
     openAtInvalid: invalid,
     count: count,
     limit: total,
-    serverTime: Date.now()
+    serverTime: Date.now(),
+    manualClosed: manual
   };
 }
 
@@ -412,7 +414,7 @@ function sameState_(a, b) {
 /* 기준값을 다시 쓸 때는 단계(phase)만 현재 시각 기준으로 재계산한다 — 부팅 당시의
    단계가 남아 있어 잘못된 화면(카운트다운 재시작)으로 가는 것을 막는다. */
 function withPhase_(s) {
-  const closed = s.limit > 0 && s.count >= s.limit;
+  const closed = !!s.manualClosed || (s.limit > 0 && s.count >= s.limit);
   let phase;
   if (s.openAtInvalid) phase = 'before';
   else if (closed) phase = 'closed';
