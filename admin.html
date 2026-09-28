@@ -137,6 +137,7 @@ function warmUp() {
 /* ---------------- 비밀번호 게이트 ---------------- */
 
 function showGate(msg) {
+  warmUp();   // 비밀번호 입력 시간 동안 GAS를 미리 깨워 둠 (콜드 스타트 예열)
   setPanel(
     '<div class="card">' +
       '<div class="field"><label>접속 비밀번호</label>' +
@@ -161,6 +162,10 @@ async function login() {
   busy = true;
   const btn = $('loginBtn');
   if (btn) { btn.disabled = true; btn.textContent = '확인 중…'; }
+  // 4초 넘게 걸리면 서버 기동 중이라는 안내로 바꿔 체감 대기 완화
+  const slowT = setTimeout(function () {
+    if (btn) btn.textContent = '서버 깨우는 중… (처음엔 10초 이상 걸릴 수 있음)';
+  }, 4000);
   try {
     /* 서버가 잠들어 있으면 첫 요청이 실패할 수 있으므로 최대 3회 시도(1.5초·3초 대기).
        재시도 시점에는 서버가 기동 중이라 대부분 성공한다. */
@@ -187,6 +192,7 @@ async function login() {
   } catch (e2) {
     showGate('서버에 연결할 수 없습니다. GAS_URL 설정과 인터넷 연결을 확인하세요.');
   } finally {
+    clearTimeout(slowT);
     busy = false;
   }
 }
@@ -198,6 +204,7 @@ function phaseOf() {
   const e = data.effective;
   const now = Date.now();
   if (e.openAtInvalid) return '설정 오류 — 신청시작 형식 확인 필요';
+  if (e.manualClosed) return '마감 유지 중 (빈자리 ' + Math.max(0, e.total - data.count) + '명, 추가접수 없음)';
   if (data.count >= e.total) return '신청 마감';
   if (e.openAtMs === null) return '신청 진행 중 (시작 시각 미설정 → 즉시 오픈)';
   if (now < e.openAtMs) return '신청 시작 전 · ' + fmtKst(e.openAtMs, false) + ' 오픈';
@@ -249,10 +256,12 @@ function showMain() {
     '<div class="card" id="tabBody"></div>' +
     '<div class="card">' +
       '<p class="sec-title">기타</p>' +
+      '<div id="reopenWrap"></div>' +
       '<button id="lockBtn" class="btn ghost mini">비밀번호 다시 입력하기</button>' +
     '</div>'
   );
   renderSummary();
+  paintReopen();
   $('tabList').addEventListener('click', function () { switchTab('list'); });
   $('tabSms').addEventListener('click', function () { switchTab('sms'); });
   $('tabSet').addEventListener('click', function () { switchTab('settings'); });
@@ -273,6 +282,44 @@ function switchTab(t) {
   if (t === 'list') renderListTab();
   else if (t === 'sms') renderSmsTab();
   else renderSettingsTab();
+}
+
+/* ---------------- 마감 해제 ---------------- */
+
+function paintReopen() {
+  const w = $('reopenWrap');
+  if (!w) return;
+  if (data && data.effective && data.effective.manualClosed) {
+    w.innerHTML = '<div class="box warn">마감 유지 중 — 취소로 생긴 빈자리에도 추가 접수를 받지 않습니다.</div>' +
+      '<button id="reopenBtn" class="btn ghost mini">마감 해제 (빈자리 추가접수 받기)</button>';
+    $('reopenBtn').addEventListener('click', reopen);
+  } else {
+    w.innerHTML = '';
+  }
+}
+
+async function reopen() {
+  if (!confirm('마감을 해제할까요? 빈자리부터 추가 접수를 받습니다.')) return;
+  if (busy) return;
+  busy = true;
+  try {
+    const d = await api({ action: 'admin_reopen', pass: pw });
+    if (d && d.ok) {
+      data.effective.manualClosed = false;
+      data.count = d.count;
+      renderSummary();
+      paintReopen();
+      busy = false;
+      if (tab === 'list') await loadList();
+      return;
+    } else {
+      alert((d && d.detail) || '해제에 실패했습니다.');
+    }
+  } catch (e) {
+    alert('서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.');
+  } finally {
+    busy = false;
+  }
 }
 
 /* ---------------- 설정 탭 (기존 설정 변경 화면) ---------------- */
@@ -368,7 +415,21 @@ async function loadList() {
   const w = $('listWrap');
   if (w && !rows.length) w.innerHTML = '<p class="center muted">불러오는 중…</p>';
   try {
-    const d = await api({ action: 'admin_list', pass: pw });
+    // 명단 조회도 20초 타임아웃 + 1회 자동 재시도 (콜드 스타트 대응)
+    let d = null;
+    for (let i = 0; i < 2; i++) {
+      try {
+        d = await api({ action: 'admin_list', pass: pw }, 20000);
+        break;
+      } catch (e) {
+        d = null;
+        if (i === 0) listMsg('warn', '응답이 느려 다시 불러오는 중…');
+      }
+    }
+    if (!d) {
+      listMsg('err', '서버 응답이 없습니다. [새로고침]을 눌러 다시 시도해 주세요.');
+      return;
+    }
     if (d && d.ok) {
       rows = d.rows || [];
       listLoaded = true;
@@ -434,6 +495,11 @@ async function cancelOne(order) {
         msg += '<br>승격: ' + d.promoted.map(function (p) {
           return esc(p.student) + '(' + p.order + '번)';
         }).join(', ');
+      }
+      if (d.manualClosed) {
+        data.effective.manualClosed = true;
+        renderSummary();
+        paintReopen();
       }
       listMsg('ok', msg);
       busy = false;
@@ -614,6 +680,7 @@ async function save() {
         confirmed: cap, waitlist: wait, total: total
       };
       renderSummary();
+      paintReopen();
       saveMsg('ok', esc(d.message || '저장되었습니다.'));
     } else {
       saveMsg('err', esc((d && d.detail) || '저장에 실패했습니다.'));
