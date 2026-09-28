@@ -569,25 +569,52 @@ function smsBytesClient(text) {
   return bytes;
 }
 
+/* 기본 문구 — {학생명}·{보호자명}은 발송 시 수신자별로 자동 치환 */
+const DEFAULT_SMS_TEXT = '[책과 문화의 밤]\n9/30(수),오후7시,별빛도서관\n참가자: {학생명}({보호자명})';
+
+function renderSmsText(t, r) {
+  return String(t).split('{학생명}').join(r.student).split('{보호자명}').join(r.guardian);
+}
+
 function renderSmsTab() {
-  const confirmed = rows.filter(function (r) { return r.status === '확정'; }).length;
+  const confirmed = rows.filter(function (r) { return r.status === '확정'; });
   $('tabBody').innerHTML =
-    '<p class="sec-title">최종 안내문자 (확정자 ' + confirmed + '명)</p>' +
-    '<div class="box info" style="margin-top:0">취소 정리 후 <b>현재 확정자 전체</b>에게 같은 문구를 일괄 발송합니다. ' +
+    '<p class="sec-title">최종 안내문자 (확정자 ' + confirmed.length + '명)</p>' +
+    '<div class="box info" style="margin-top:0">취소 정리 후 <b>현재 확정자 전체</b>에게 발송합니다. ' +
+    '<b>{학생명}</b>·<b>{보호자명}</b>은 각 수신자의 명단 정보로 자동 치환됩니다.<br>' +
     '접수 때 받은 문자(K열)는 그대로 두고, 발송 기록은 『문자기록』 시트에 남습니다.' +
     (listLoaded ? '' : '<br>대상 수를 보려면 [접수명단] 탭을 한 번 열어 명단을 불러오세요.') + '</div>' +
     '<div class="field"><label>문자 내용 (1000자 이내)</label>' +
-      '<textarea class="msg" id="b_text" maxlength="1000" placeholder="예: 9월 책과 문화의 밤 최종 안내입니다. ..."></textarea>' +
+      '<textarea class="msg" id="b_text" maxlength="1000">' + esc(DEFAULT_SMS_TEXT) + '</textarea>' +
       '<div class="hint" id="b_bytes"></div>' +
     '</div>' +
+    '<div class="row2">' +
+      '<button id="b_reset" class="btn ghost mini" style="flex:1">기본문구로 되돌리기</button>' +
+    '</div>' +
+    '<div id="b_preview"></div>' +
     '<div id="b_msg"></div>' +
     '<button id="b_send" class="btn">확정자 전체에게 발송</button>';
   const update = function () {
     const t = $('b_text').value;
-    const b = smsBytesClient(t);
-    $('b_bytes').textContent = t.length + '자 · ' + b + '바이트 · ' + (b <= 90 ? 'SMS(단문)' : 'LMS(장문)');
+    const pv = $('b_preview');
+    if (confirmed.length) {
+      const first = renderSmsText(t, confirmed[0]);
+      const b = smsBytesClient(first);
+      $('b_bytes').textContent = '첫 대상 기준 ' + first.length + '자 · ' + b + '바이트 · ' +
+        (b <= 90 ? 'SMS(단문)' : 'LMS(장문)') + ' (수신자별 글자수 상이)';
+      let html = '<div class="hint" style="margin-top:8px">미리보기 (앞 2명)</div>';
+      confirmed.slice(0, 2).forEach(function (r) {
+        html += '<div class="box info">' + esc(renderSmsText(t, r)).replace(/\n/g, '<br>') + '</div>';
+      });
+      pv.innerHTML = html;
+    } else {
+      const b = smsBytesClient(t);
+      $('b_bytes').textContent = t.length + '자 · ' + b + '바이트 · ' + (b <= 90 ? 'SMS(단문)' : 'LMS(장문)');
+      pv.innerHTML = '';
+    }
   };
   $('b_text').addEventListener('input', update);
+  $('b_reset').addEventListener('click', function () { $('b_text').value = DEFAULT_SMS_TEXT; update(); });
   update();
   $('b_send').addEventListener('click', broadcast);
 }
