@@ -572,6 +572,9 @@ function smsBytesClient(text) {
 /* 기본 문구 — {학생명}·{보호자명}은 발송 시 수신자별로 자동 치환 */
 const DEFAULT_SMS_TEXT = '[책과 문화의 밤]\n9/30(수), 오후7시, 별빛도서관\n참가자: {학생명}({보호자명})';
 
+/* 대기자 안내 기본 문구 (수정 가능) */
+const DEFAULT_WAITLIST_SMS_TEXT = '[책과 문화의 밤]\n아쉽게도 최종 선정되지 못했습니다.\n다음 기회에 꼭 함께해요!';
+
 function renderSmsText(t, r) {
   // 서버 renderTemplate_와 동일 규칙 (전각 괄호·괄호 안 공백 허용) — 미리보기 일치용
   return String(t)
@@ -582,6 +585,7 @@ function renderSmsText(t, r) {
 
 function renderSmsTab() {
   const confirmed = rows.filter(function (r) { return r.status === '확정'; });
+  const waitlist = rows.filter(function (r) { return r.status !== '확정'; });
   $('tabBody').innerHTML =
     '<p class="sec-title">최종 안내문자 (확정자 ' + confirmed.length + '명)</p>' +
     '<div class="box info" style="margin-top:0">취소 정리 후 <b>현재 확정자 전체</b>에게 발송합니다. ' +
@@ -597,7 +601,20 @@ function renderSmsTab() {
     '</div>' +
     '<div id="b_preview"></div>' +
     '<div id="b_msg"></div>' +
-    '<button id="b_send" class="btn">확정자 전체에게 발송</button>';
+    '<button id="b_send" class="btn">확정자 전체에게 발송</button>' +
+    '<p class="sec-title" style="margin-top:20px">대기자 안내 메시지 (대기자 ' + waitlist.length + '명)</p>' +
+    '<div class="box info" style="margin-top:0">현재 <b>대기자 전체</b>에게 발송합니다. ' +
+    '<b>{학생명}</b>·<b>{보호자명}</b>은 각 수신자의 명단 정보로 자동 치환됩니다.</div>' +
+    '<div class="field"><label>문자 내용 (1000자 이내)</label>' +
+      '<textarea class="msg" id="w_text" maxlength="1000">' + esc(DEFAULT_WAITLIST_SMS_TEXT) + '</textarea>' +
+      '<div class="hint" id="w_bytes"></div>' +
+    '</div>' +
+    '<div class="row2">' +
+      '<button id="w_reset" class="btn ghost mini" style="flex:1">기본문구로 되돌리기</button>' +
+    '</div>' +
+    '<div id="w_preview"></div>' +
+    '<div id="w_msg"></div>' +
+    '<button id="w_send" class="btn">대기자 전체에게 발송</button>';
   const update = function () {
     const t = $('b_text').value;
     const pv = $('b_preview');
@@ -621,6 +638,70 @@ function renderSmsTab() {
   $('b_reset').addEventListener('click', function () { $('b_text').value = DEFAULT_SMS_TEXT; update(); });
   update();
   $('b_send').addEventListener('click', broadcast);
+  const updateWait = function () {
+    const t = $('w_text').value;
+    const pv = $('w_preview');
+    if (waitlist.length) {
+      const first = renderSmsText(t, waitlist[0]);
+      const b = smsBytesClient(first);
+      $('w_bytes').textContent = '첫 대상 기준 ' + first.length + '자 · ' + b + '바이트 · ' +
+        (b <= 90 ? 'SMS(단문)' : 'LMS(장문)') + ' (수신자별 글자수 상이)';
+      let html = '<div class="hint" style="margin-top:8px">미리보기 (앞 2명)</div>';
+      waitlist.slice(0, 2).forEach(function (r) {
+        html += '<div class="box info">' + esc(renderSmsText(t, r)).replace(/\n/g, '<br>') + '</div>';
+      });
+      pv.innerHTML = html;
+    } else {
+      const b = smsBytesClient(t);
+      $('w_bytes').textContent = t.length + '자 · ' + b + '바이트 · ' + (b <= 90 ? 'SMS(단문)' : 'LMS(장문)');
+      pv.innerHTML = '';
+    }
+  };
+  $('w_text').addEventListener('input', updateWait);
+  $('w_reset').addEventListener('click', function () { $('w_text').value = DEFAULT_WAITLIST_SMS_TEXT; updateWait(); });
+  updateWait();
+  $('w_send').addEventListener('click', broadcastWait);
+}
+
+function wMsg(kind, html) {
+  $('w_msg').innerHTML = html ? '<div class="box ' + kind + '">' + html + '</div>' : '';
+}
+
+async function broadcastWait() {
+  const t = $('w_text') ? $('w_text').value : '';
+  if (!t.trim()) { wMsg('err', '발송할 문자 내용을 입력하세요.'); return; }
+  const wait = rows.filter(function (r) { return r.status !== '확정'; }).length;
+  const label = listLoaded ? '대기자 ' + wait + '명에게' : '대기자 전체에게';
+  if (!confirm(label + ' 아래 내용을 발송할까요?\n\n' + t.slice(0, 120) + (t.length > 120 ? '…' : ''))) return;
+  if (busy) return;
+  busy = true;
+  const btn = $('w_send');
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = '발송 중… (잠시만 기다려 주세요)';
+  wMsg('', '');
+  try {
+    if (t.length > 1000) { wMsg('err', '문자 내용은 1000자 이내로 입력하세요.'); return; }
+    const d = await api({ action: 'admin_broadcast', pass: pw, text: t, to: 'waitlist' });
+    if (d && d.ok) {
+      const fails = (d.results || []).filter(function (r) { return !r.sent; });
+      let html = esc(d.message || '발송 완료');
+      if (fails.length) {
+        html += '<br>실패: ' + fails.map(function (r) {
+          return esc(r.student) + '(' + r.order + '번:' + esc(r.result) + ')';
+        }).join(', ');
+      }
+      wMsg(fails.length ? 'warn' : 'ok', html);
+    } else {
+      wMsg('err', esc((d && d.detail) || '발송에 실패했습니다.'));
+    }
+  } catch (e) {
+    wMsg('err', '서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.');
+  } finally {
+    busy = false;
+    btn.disabled = false;
+    btn.textContent = old;
+  }
 }
 
 function bMsg(kind, html) {
