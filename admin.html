@@ -570,7 +570,7 @@ function smsBytesClient(text) {
 }
 
 /* 기본 문구 — {학생명}·{보호자명}은 발송 시 수신자별로 자동 치환 */
-const DEFAULT_SMS_TEXT = '[책과 문화의 밤]\n9/30(수),오후7시,별빛도서관\n참가자: {학생명}({보호자명})';
+const DEFAULT_SMS_TEXT = '[책과 문화의 밤]\n9/30(수), 오후7시, 별빛도서관\n참가자: {학생명}({보호자명})';
 
 function renderSmsText(t, r) {
   // 서버 renderTemplate_와 동일 규칙 (전각 괄호·괄호 안 공백 허용) — 미리보기 일치용
