@@ -573,7 +573,11 @@ function smsBytesClient(text) {
 const DEFAULT_SMS_TEXT = '[책과 문화의 밤]\n9/30(수),오후7시,별빛도서관\n참가자: {학생명}({보호자명})';
 
 function renderSmsText(t, r) {
-  return String(t).split('{학생명}').join(r.student).split('{보호자명}').join(r.guardian);
+  // 서버 renderTemplate_와 동일 규칙 (전각 괄호·괄호 안 공백 허용) — 미리보기 일치용
+  return String(t)
+    .split('｛').join('{').split('｝').join('}')
+    .replace(/\{\s*학생명\s*\}/g, r.student)
+    .replace(/\{\s*보호자명\s*\}/g, r.guardian);
 }
 
 function renderSmsTab() {
