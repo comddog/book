@@ -381,15 +381,15 @@ function filteredRows() {
 function renderListTab() {
   $('tabBody').innerHTML =
     '<p class="sec-title">접수명단 (' + rows.length + '명)</p>' +
-    '<div class="field" style="margin-top:0"><label>검색 (학생명·학번·보호자명)</label>' +
+    '<div id="listMsg"></div>' +
+    '<div id="listWrap"><p class="center muted">불러오는 중…</p></div>' +
+    '<div class="field"><label>검색 (학생명·학번·보호자명)</label>' +
       '<input id="q" type="text" maxlength="20" value="' + esc(listFilter) + '" placeholder="예: 김일광 / 1101">' +
     '</div>' +
     '<div class="row2">' +
       '<button id="reloadBtn" class="btn ghost mini" style="flex:1">새로고침</button>' +
       '<button id="csvBtn" class="btn ghost mini" style="flex:1">CSV 저장</button>' +
     '</div>' +
-    '<div id="listMsg"></div>' +
-    '<div id="listWrap"><p class="center muted">불러오는 중…</p></div>' +
     '<div class="box info">개별 취소 시 해당 행이 삭제되고 순번이 1번부터 당겨집니다. 대기 1번이 확정 꼬리로 자동 승격됩니다.<br>' +
     '전체 초기화는 아래 빨간 버튼(2중 확인)을 사용하세요. 시트에서 직접 지워도 됩니다.</div>' +
     '<button id="resetBtn" class="btn danger mini">전체 초기화 (접수 0으로)</button>';
